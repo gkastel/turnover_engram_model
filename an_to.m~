@@ -1,0 +1,379 @@
+defaults
+
+close all
+ninputs=100
+
+
+nruns =10
+all = {};
+all_ff = {};
+all_ff_err = {};
+all_br = {};
+
+all_brturn = {};
+all_brnoturn = {};
+
+all_sparse = {};
+all_sparse_err = {};
+
+all_pops = {};
+all_pops_err = {};
+
+all_pops4 = {};
+all_pops4_err = {};
+
+
+all_ff4 = {};
+all_ff4_err = {};
+
+
+all_sparse4 = {};
+all_sparse4_err = {};
+
+Conditions = {'REP0G', 'REP0L'}; 
+%Conditions = {'SEP0G', 'SEP0L'}; 
+
+Turnovers = {0,5,10,15,20};
+npatterns=4
+
+for NCOND=1:length(Conditions)
+    CONDITION=Conditions{NCOND}
+    
+    ss1 = zeros(5,10);
+    
+    for NBT=1:length(Turnovers)
+        BT=Turnovers{NBT}
+        
+        
+        spks = zeros(npatterns, nruns);
+        pops = zeros(npatterns, nruns);
+        sparse = zeros(npatterns, nruns);
+        
+        branch_syns = zeros(npyrs*nbranches, nruns);
+        br_hists = zeros(ninputs, 12, nruns);
+        clustering = zeros(ninputs, nruns);
+        brstrengths = zeros(ninputs, npyrs*nbranches);
+        
+        brweights = zeros(ninputs, npyrs*nbranches, nruns);
+        nrnweights = zeros(ninputs, npyrs, nruns);
+        brweightcors = zeros(ninputs, ninputs, nruns);
+        brsyncors= zeros(ninputs, ninputs, nruns);
+        nrnweightcors = zeros(ninputs, ninputs, nruns);
+        
+        brcommon = zeros(ninputs, ninputs, nruns);
+        
+        
+        clust_all = {};
+        clust_all = cell(9,1);
+        
+        ISI=120;
+        
+        bsyns_turn = zeros(npyrs*nbranches, nruns);
+        bsyns_noturn = zeros(npyrs*nbranches, nruns);
+    
+        
+       
+        for run = 1:nruns
+            
+            fn = sprintf('./data/%s_%d_%d/spikesperpattern.dat', CONDITION, BT,run-1);
+            spk = load( fn);
+            
+            recallspikes = spk(:, 1:npyrs)/(stimduration/1000);
+
+            pop = recallspikes>CUTOFF; %Hz
+            
+            spks(:, run) = sum(recallspikes,2);
+            
+            pops(:,  run) = sum(pop,2);
+            
+            for npat=1:npatterns
+                sparse(npat,  run) = trevrolls(recallspikes(npat,:) );
+            end
+                        
+            ff = sprintf('./data/%s_%d_%d/synstate.dat', CONDITION, BT,run-1);
+            ss = load(ff);
+            
+            for i=1:size(ss,1)
+                bid=ss(i,2);
+                nid=ss(i,3);
+                srcid=ss(i,5);
+                bstrength = ss(i,6);
+                w=ss(i,7);
+                if (srcid >= 0 && bid <= npyrs*nbranches)
+                    brweights(srcid+1, bid+1, run) = brweights(srcid+1, bid+1, run) + w;
+                    brstrengths(srcid+1, bid+1)=bstrength;
+                    nrnweights(srcid+1, nid+1,run) = nrnweights(srcid+1, nid+1,run) + w;
+                end
+                if (srcid >= 0 && bid <= npyrs*nbranches &&  w > 0.7)
+                    branch_syns( bid+1, run) = branch_syns( bid+1, run)+1;
+                    
+                    branchid = mod(bid, nbranches);
+                    
+                    if (branchid < BT)
+                        bsyns_turn(bid+1, run) = bsyns_turn(bid+1, run)+1;
+                    else
+                        bsyns_noturn(bid+1, run) = bsyns_noturn(bid+1, run)+1;
+                    end
+
+                end
+            end
+        end
+        
+      
+        
+        all_brturn{NCOND, NBT} = bsyns_turn;
+        all_brnoturn{NCOND, NBT} = bsyns_noturn;
+        all_br{NCOND,NBT} = branch_syns;
+        
+        
+ 
+       
+        for patidx=1:4
+            m_p = mean(pops(patidx,:), 2);
+            s_p = stderr(pops(patidx, :) );
+
+            all_pops4{NCOND,NBT, patidx} = m_p; 
+            all_pops4_err{NCOND,NBT, patidx} = s_p;
+
+            m_p = mean(spks(patidx,:), 2)
+            s_p = stderr(spks(patidx, :) );
+
+            all_ff4{NCOND,NBT,patidx} = m_p/npyrs;
+            all_ff4_err{NCOND,NBT,patidx} = s_p/npyrs;
+
+            
+            m_p = mean(sparse(patidx,:), 2);
+            s_p = stderr(sparse(patidx, :) );
+
+            all_sparse4{NCOND, NBT,patidx} = m_p;
+            all_sparse4_err{NCOND, NBT, patidx} = s_p;
+
+        end
+
+
+       
+        for patidx=1:1
+            m_p = mean(pops(patidx,:), 2);
+            s_p = stderr(pops(patidx, :) );
+
+            all_pops{NCOND,NBT} = m_p; 
+            all_pops_err{NCOND,NBT} = s_p;
+            
+
+            m_p = mean(spks(patidx,:), 2);
+            
+            ss1(NBT, :) = spks(patidx,:) /npyrs;
+            
+            s_p = stderr(spks(patidx, :) );
+
+            all_ff{NCOND,NBT} = m_p/npyrs;
+            all_ff_err{NCOND,NBT} = s_p/npyrs;
+
+            
+            m_p = mean(sparse(patidx,:), 2);
+            s_p = stderr(sparse(patidx, :) );
+
+            all_sparse{NCOND, NBT} = m_p;
+            all_sparse_err{NCOND, NBT} = s_p;
+        end
+
+    end
+    
+    
+end
+
+% 
+% figure()
+% z = [];
+% 
+% for y=1:length(Turnovers)
+%     
+%     z(:,y) = all_ff{1, y};
+% end
+% mesh(z)
+% tit='FF'
+% title(tit);
+% export_fig(sprintf('./figs/%s_mesh_%s.pdf',CONDITION, tit), '-transparent')
+
+
+close all
+
+for NCOND=1:length(Conditions)
+    CONDITION=Conditions{NCOND}
+    nm = [];
+    nm_err = [];
+    
+    nturn = [];
+    nturn_err = [];
+    
+    nnoturn = [];
+    nnoturn_err = [];
+    
+    sss = zeros(5,10)
+    for NBT=1:length(Turnovers)
+        BT=Turnovers{NBT};
+        
+        sb = sum(all_br{NCOND,NBT}>3) ./ sum(all_br{NCOND,NBT}>0);
+        
+        sss(NBT,:) = 100*sb';
+        
+        nm(NBT) = mean(sb);
+        nm_err(NBT) = stderr(sb);
+        
+        sb = sum(all_brturn{NCOND,NBT}>3) ./ sum(all_brturn{NCOND,NBT}>0);
+        nturn(NBT) = mean(sb);
+        nturn_err(NBT) = stderr(sb);
+        
+        sb = sum(all_brnoturn{NCOND,NBT}>3) ./ sum(all_brnoturn{NCOND,NBT}>0);
+        nnoturn(NBT) = mean(sb);
+        nnoturn_err(NBT) = stderr(sb);
+                
+    end
+    figure;
+    hold on
+    errorbar(100*nm, 100*nm_err, 'b');
+    errorbar(100*nturn, 100*nturn_err, 'm');
+    errorbar(100*nnoturn, 100*nnoturn_err, 'c');
+    ylim([10, 100]);
+    legend( 'All branches', 'Branches with Turnover', 'Branches Without Turnover');
+    set(gca, 'XTick', [1:5])
+    set(gca, 'XTickLabel', [0:5:20])
+    title(sprintf('%s', CONDITION));
+    xlabel('Number of branches with turnover');
+    ylabel('Percentage of branches containing clusters');
+    %export_fig(sprintf('./figs/%s_BRS.pdf',CONDITION), '-transparent');
+    csvwrite(sprintf('./figs/%s_BRS.csv',CONDITION), [100*nm; 100*nm_err;        100*nturn; 100*nturn_err;        100*nnoturn; 100*nnoturn_err]);
+        
+    
+end
+
+
+
+figure;
+hold on
+mat  = cell2mat(all_sparse);
+mat_err  = cell2mat(all_sparse_err);
+
+errorbar( mat(1,:), mat_err(1,:), 'g');
+errorbar( mat(2,:), mat_err(2,:), 'r');
+ylim([.2, 1.1]);
+legend( 'Somatic PRPs', 'Local PRPs');
+set(gca, 'XTick', [1:5])
+set(gca, 'XTickLabel', [0:5:20])
+%title(sprintf('%s', CONDITION));
+xlabel('Number of branches with turnover per neuron');
+ylabel('Active Population Sparsity');
+%export_fig(sprintf('./figs/%s_SPARSE.pdf',CONDITION), '-transparent');
+csvwrite(sprintf('./figs/%s_SPARSE.csv',CONDITION), [mat; mat_err] )
+
+
+
+
+figure;
+hold on
+
+mat = all_pops4(2,1,:);
+mat = 100*cell2mat(mat(:))/npyrs
+mat_err = all_pops4_err(2,1,:);
+mat_err = 100*cell2mat(mat_err(:))/npyrs
+errorbar( mat, mat_err, 'r');
+
+mat = all_pops4(2,5,:);
+mat = 100*cell2mat(mat(:))/npyrs
+mat_err = all_pops4_err(2,5,:);
+mat_err = 100*cell2mat(mat_err(:))/npyrs
+errorbar( mat, mat_err, 'g');
+
+%errorbar( mat(1,:), mat_err(1,:), 'g');
+
+ylim([10, 40]);
+legend( 'Low Turnover', 'High Turnover');
+%set(gca, 'XTick', [1:5])
+set(gca, 'XTickLabel', [0:5:20])
+%title(sprintf('%s', CONDITION));
+xlabel('Day of training');
+ylabel('Active Population (%)');
+%export_fig(sprintf('./figs/%s_POPS.pdf',CONDITION), '-transparent');
+
+
+
+figure;
+hold on
+mat  = 100*cell2mat(all_pops)/npyrs;
+mat_err  = 100*cell2mat(all_pops_err)/npyrs;
+errorbar( mat(1,:), mat_err(1,:), 'g');
+errorbar( mat(2,:), mat_err(2,:), 'r');
+ylim([10, 40]);
+legend( 'Somatic PRPs', 'Local PRPs');
+set(gca, 'XTick', [1:5])
+set(gca, 'XTickLabel', [0:5:20])
+%title(sprintf('%s', CONDITION));
+xlabel('Number of branches with turnover per neuron');
+ylabel('Active Population (%)');
+%export_fig(sprintf('./figs/%s_POPS.pdf',CONDITION), '-transparent');
+
+
+
+
+figure;
+hold on
+mat  = cell2mat(all_ff);
+mat_err  = cell2mat(all_ff_err);
+errorbar( mat(1,:), mat_err(1,:), 'g');
+errorbar( mat(2,:), mat_err(2,:), 'r');
+ylim([0, 80]);
+legend( 'Somatic PRPs', 'Local PRPs');
+set(gca, 'XTick', [1:5])
+set(gca, 'XTickLabel', [0:5:20])
+%title(sprintf('%s', CONDITION));
+xlabel('Number of branches with turnover per neuron');
+ylabel('Average firing rate [Hz] ');
+%export_fig(sprintf('./figs/%s_FF.pdf',CONDITION), '-transparent');
+csvwrite(sprintf('./figs/%s_FF.csv',CONDITION), [ mat; mat_err]);
+
+
+% close all
+% col=hsv(5);
+% for NCOND=1:length(Conditions)
+%     CONDITION=Conditions{NCOND}
+%     figure
+%     hold on
+%     for NBT=1:length(Turnovers)
+%         BT=Turnovers{NBT}
+%         errorbar(all_pops{NCOND, NBT}, all_pops_err{NCOND, NBT}, 'color', col(NBT,:) )
+%         
+%     end
+%     legend('0','5','10','15','20 Branches')
+%     title(sprintf('%s', CONDITION));
+%     xlabel('Pattern #');
+%     ylabel('% Active Neurons');
+%     
+%     hold off
+%     export_fig(sprintf('./figs/%s_POPS.pdf',CONDITION), '-transparent')
+% end
+
+
+for patidx=1:4
+	figure;
+	hold on
+	mat  = cell2mat(all_sparse4);
+	mat = mat(:,:,patidx);
+	mat_err  = cell2mat(all_sparse4_err);
+	mat_err = mat_err(:,:,patidx)
+
+	errorbar( mat(1,:), mat_err(1,:), 'g');
+	errorbar( mat(2,:), mat_err(2,:), 'r');
+	ylim([.2, 1.1]);
+	legend( 'Somatic PRPs', 'Local PRPs');
+	set(gca, 'XTick', [1:5])
+	set(gca, 'XTickLabel', [0:5:20])
+	%title(sprintf('%s', CONDITION));
+	xlabel('Number of branches with turnover per neuron');
+	ylabel(sprintf('Active Population Sparsity %d', patidx));
+	%export_fig(sprintf('./figs/%s_SPARSE%d.pdf',CONDITION, patidx), '-transparent');
+
+end
+
+
+
+
